@@ -15,7 +15,7 @@ namespace Invoice.WebAPI.Diagnostics
 {
     class SerilogMiddleware
     {
-        const string MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
+        const string MessageTemplate = "HTTP {RequestMethod} {RequestPath} {RequestBody} responded {StatusCode} {ResponseBody} in {Elapsed:0.0000} ms";
 
         static readonly ILogger Log = Serilog.Log.ForContext<SerilogMiddleware>();
 
@@ -28,23 +28,36 @@ namespace Invoice.WebAPI.Diagnostics
             _next = next ?? throw new ArgumentNullException(nameof(next));
         }
 
-        public async Task Invoke(HttpContext context)
+        public async Task Invoke(HttpContext httpContext)
         {
-            var request = await FormatRequest(context.Request);
-
-            var originalBodyStream = context.Response.Body;
-
-            using (var responseBody = new MemoryStream())
+            var start = Stopwatch.GetTimestamp();
+            try
             {
-                context.Response.Body = responseBody;
+                if (httpContext == null) throw new ArgumentNullException(nameof(httpContext));             
 
-                await _next(context);
+                var request = await FormatRequest(httpContext.Request);
 
-                var response = await FormatResponse(context.Response);
+                var originalBodyStream = httpContext.Response.Body;
+
+                using (var responseBody = new MemoryStream())
+                {
+                    httpContext.Response.Body = responseBody;
+
+                    await _next(httpContext);
+                    var elapsedMs = GetElapsedMilliseconds(start, Stopwatch.GetTimestamp());
+                    var statusCode = httpContext.Response?.StatusCode;
+                    var level = statusCode > 499 ? LogEventLevel.Error : LogEventLevel.Information;
+                    var log = level == LogEventLevel.Error ? LogForErrorContext(httpContext) : Log;
+
+                    var response = await FormatResponse(httpContext.Response);
+                    log.Write(level, MessageTemplate, httpContext.Request.Method, GetPath(httpContext), request, statusCode, response, elapsedMs);
 
 
-                await responseBody.CopyToAsync(originalBodyStream);
+                    await responseBody.CopyToAsync(originalBodyStream);
+                }
             }
+            catch (Exception ex) when (LogException(httpContext, GetElapsedMilliseconds(start, Stopwatch.GetTimestamp()), ex)) { }
+
         }
 
         private async Task<string> FormatRequest(HttpRequest request)
@@ -74,5 +87,40 @@ namespace Invoice.WebAPI.Diagnostics
 
             return $"{response.StatusCode}: {text}";
         }
+
+        static bool LogException(HttpContext httpContext, double elapsedMs, Exception ex)
+        {
+            LogForErrorContext(httpContext)
+                .Error(ex, MessageTemplate, httpContext.Request.Method, GetPath(httpContext), 500, elapsedMs);
+
+            return false;
+        }
+
+        static ILogger LogForErrorContext(HttpContext httpContext)
+        {
+            var request = httpContext.Request;
+
+            var loggedHeaders = request.Headers
+                .Where(h => HeaderWhitelist.Contains(h.Key))
+                .ToDictionary(h => h.Key, h => h.Value.ToString());
+
+            var result = Log
+                .ForContext("RequestHeaders", loggedHeaders, destructureObjects: true)
+                .ForContext("RequestHost", request.Host)
+                .ForContext("RequestProtocol", request.Protocol);
+
+            return result;
+        }
+
+        static double GetElapsedMilliseconds(long start, long stop)
+        {
+            return (stop - start) * 1000 / (double)Stopwatch.Frequency;
+        }
+
+        static string GetPath(HttpContext httpContext)
+        {
+            return httpContext.Features.Get<IHttpRequestFeature>()?.RawTarget ?? httpContext.Request.Path.ToString();
+        }
     }
 }
+
