@@ -50,9 +50,8 @@ namespace Invoice.WebAPI.Diagnostics
                     var log = level == LogEventLevel.Error ? LogForErrorContext(httpContext) : Log;
 
                     var response = await FormatResponse(httpContext.Response);
+
                     log.Write(level, MessageTemplate, httpContext.Request.Method, GetPath(httpContext), request, statusCode, response, elapsedMs);
-
-
                     await responseBody.CopyToAsync(originalBodyStream);
                 }
             }
