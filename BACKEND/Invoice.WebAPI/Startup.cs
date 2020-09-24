@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Invoice.WebAPI.Diagnostics;
+using Invoice.WebAPI.Middlewares;
 using Invoice.WebAPI.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -75,7 +76,8 @@ namespace Invoice.WebAPI
             app.UseRouting();
 
             app.UseAuthorization();
-            app.UseMiddleware<SerilogMiddleware>();
+            app.UseMiddleware<LogRequestMiddleware>();
+            app.UseMiddleware<LogResponseMiddleware>();
 
             app.UseEndpoints(endpoints =>
             {

@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http.Features;
 using System.IO;
 using System.Text;
+using Microsoft.AspNetCore.Http.Extensions;
 
 namespace Invoice.WebAPI.Diagnostics
 {
@@ -33,9 +34,16 @@ namespace Invoice.WebAPI.Diagnostics
             var start = Stopwatch.GetTimestamp();
             try
             {
-                if (httpContext == null) throw new ArgumentNullException(nameof(httpContext));             
+                if (httpContext == null) throw new ArgumentNullException(nameof(httpContext));
 
-                var request = await FormatRequest(httpContext.Request);
+                //var request = await FormatRequest(httpContext.Request);
+                var requestBodyStream = new MemoryStream();
+                var originalRequestBody = httpContext.Request.Body;
+                await httpContext.Request.Body.CopyToAsync(requestBodyStream);
+                requestBodyStream.Seek(0, SeekOrigin.Begin);
+
+                var url = UriHelper.GetDisplayUrl(httpContext.Request);
+                var request = new StreamReader(requestBodyStream).ReadToEnd();
 
                 var originalBodyStream = httpContext.Response.Body;
 
