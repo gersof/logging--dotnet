@@ -1,0 +1,13 @@
+2020-09-28 22:34:49.511 -05:00 [INF] Starting up
+2020-09-28 22:35:04.788 -05:00 [INF] HTTP GET /api/Products https localhost:44320/api/Products   responded 200 Response [{"id":1,"name":"Pepsi 2","invoiceDetail":[]},{"id":2,"name":"Pepsi 2","invoiceDetail":[]},{"id":3,"name":"Pepsi 2","invoiceDetail":[]},{"id":4,"name":"Pepsi88","invoiceDetail":[]},{"id":5,"name":"Pepsi88","invoiceDetail":[]},{"id":6,"name":"Pepsi88","invoiceDetail":[]},{"id":7,"name":"Pepsi88","invoiceDetail":[]},{"id":8,"name":"Pepsi88","invoiceDetail":[]},{"id":9,"name":"Pepsi88","invoiceDetail":[]}] in 2070.5876 ms
+2020-09-28 22:35:09.706 -05:00 [INF] HTTP POST /api/Products https localhost:44320/api/Products  {"id":0,"name":"Abc"} responded 200 Response {"id":10,"name":"Abc","invoiceDetail":[]} in 374.1939 ms
+2020-09-28 22:35:33.998 -05:00 [INF] HTTP GET /api/Products/10 https localhost:44320/api/Products/10   responded 200 Response {"id":10,"name":"Abc","invoiceDetail":[]} in 218.8515 ms
+2020-09-28 22:36:05.084 -05:00 [INF] HTTP PUT /api/Products/10 https localhost:44320/api/Products/10  {
+"id": 10,
+  "name": "Abc1",
+} responded 400 Response {"type":"https://tools.ietf.org/html/rfc7231#section-6.5.1","title":"One or more validation errors occurred.","status":400,"traceId":"|c9d9c0d6-4819a1bbe3814133.","errors":{"$.name":["The JSON object contains a trailing comma at the end which is not supported in this mode. Change the reader options. Path: $.name | LineNumber: 3 | BytePositionInLine: 0."]}} in 39.7959 ms
+2020-09-28 22:36:27.871 -05:00 [INF] HTTP PUT /api/Products/10 https localhost:44320/api/Products/10  {
+"id": 10,
+  "name": "Abc1",
+} responded 400 Response {"type":"https://tools.ietf.org/html/rfc7231#section-6.5.1","title":"One or more validation errors occurred.","status":400,"traceId":"|c9d9c0d7-4819a1bbe3814133.","errors":{"$.name":["The JSON object contains a trailing comma at the end which is not supported in this mode. Change the reader options. Path: $.name | LineNumber: 3 | BytePositionInLine: 0."]}} in 5.1940 ms
+2020-09-28 22:37:01.640 -05:00 [INF] HTTP DELETE /api/Products/10 https localhost:44320/api/Products/10   responded 200 Response {"id":10,"name":"Abc","invoiceDetail":[]} in 174.2923 ms

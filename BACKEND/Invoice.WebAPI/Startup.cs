@@ -76,8 +76,11 @@ namespace Invoice.WebAPI
             app.UseRouting();
 
             app.UseAuthorization();
-            app.UseMiddleware<LogRequestMiddleware>();
-            app.UseMiddleware<LogResponseMiddleware>();
+            //app.UseMiddleware<LogRequestMiddleware>();
+            //app.UseMiddleware<LogResponseMiddleware>();
+            //app.UseMiddleware<SerilogMiddleware>();
+            app.UseRequestResponseLogging();
+
 
             app.UseEndpoints(endpoints =>
             {

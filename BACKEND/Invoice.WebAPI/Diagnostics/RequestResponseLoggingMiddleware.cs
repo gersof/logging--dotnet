@@ -1,102 +1,85 @@
-﻿
+﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Serilog;
 using Serilog.Events;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http.Features;
 using System.IO;
+using System.Linq;
 using System.Text;
-using Microsoft.AspNetCore.Http.Extensions;
+using System.Threading.Tasks;
 
 namespace Invoice.WebAPI.Diagnostics
 {
-    class SerilogMiddleware
+    public class RequestResponseLoggingMiddleware
     {
+        private readonly RequestDelegate _next;
         const string MessageTemplate = "HTTP {RequestMethod} {RequestPath} {RequestBody} responded {StatusCode} {ResponseBody} in {Elapsed:0.0000} ms";
-
-        static readonly ILogger Log = Serilog.Log.ForContext<SerilogMiddleware>();
-
         static readonly HashSet<string> HeaderWhitelist = new HashSet<string> { "Content-Type", "Content-Length", "User-Agent" };
 
-        readonly RequestDelegate _next;
+        static readonly ILogger Log = Serilog.Log.ForContext<RequestResponseLoggingMiddleware>();
 
-        public SerilogMiddleware(RequestDelegate next)
+        public RequestResponseLoggingMiddleware(RequestDelegate next)
         {
             _next = next ?? throw new ArgumentNullException(nameof(next));
         }
 
-        public async Task Invoke(HttpContext httpContext)
+        public async Task Invoke(HttpContext context)
         {
             var start = Stopwatch.GetTimestamp();
-            try
+
+            var req = await FormatRequest(context.Request);
+
+            var originalBodyStream = context.Response.Body;
+
+            using (var responseBody = new MemoryStream())
             {
-                if (httpContext == null) throw new ArgumentNullException(nameof(httpContext));
+                context.Response.Body = responseBody;
 
-                //var request = await FormatRequest(httpContext.Request);
-             
+                await _next(context);
 
-                using (var responseBody = new MemoryStream())
-                {
-                    var requestBodyStream = new MemoryStream();
-                    await httpContext.Request.Body.CopyToAsync(requestBodyStream);
+                var resp = await FormatResponse(context.Response);
+                var elapsedMs = GetElapsedMilliseconds(start, Stopwatch.GetTimestamp());
+                var statusCode = context.Response?.StatusCode;
+                var level = statusCode > 499 ? LogEventLevel.Error : LogEventLevel.Information;
+                var log = level == LogEventLevel.Error ? LogForErrorContext(context) : Log;
+                log.Write(level, MessageTemplate, context.Request.Method, GetPath(context), req, statusCode, resp, elapsedMs);
 
-
-                    await _next(httpContext);
-                 
-                    var originalRequestBody = httpContext.Request.Body;
-                    //await httpContext.Request.Body.CopyToAsync(requestBodyStream);
-                    //requestBodyStream.Seek(0, SeekOrigin.Begin);
-
-                    var url = UriHelper.GetDisplayUrl(httpContext.Request);
-                    //var request = new StreamReader(requestBodyStream).ReadToEnd();
-
-                    var originalBodyStream = httpContext.Response.Body;
-                    //httpContext.Response.Body = responseBody;
-                    var elapsedMs = GetElapsedMilliseconds(start, Stopwatch.GetTimestamp());
-                    var statusCode = httpContext.Response?.StatusCode;
-                    var level = statusCode > 499 ? LogEventLevel.Error : LogEventLevel.Information;
-                    var log = level == LogEventLevel.Error ? LogForErrorContext(httpContext) : Log;
-
-                    var response = await FormatResponse(httpContext.Response);
-
-                    log.Write(level, MessageTemplate, httpContext.Request.Method, GetPath(httpContext), ""/*request*/, statusCode, response, elapsedMs);
-                    await responseBody.CopyToAsync(originalBodyStream);
-                }
+                await responseBody.CopyToAsync(originalBodyStream);
             }
-            catch (Exception ex) when (LogException(httpContext, GetElapsedMilliseconds(start, Stopwatch.GetTimestamp()), ex)) { }
-
         }
 
         private async Task<string> FormatRequest(HttpRequest request)
         {
-            var body = request.Body;
-
             request.EnableBuffering();
-
+            var body = request.Body;
             var buffer = new byte[Convert.ToInt32(request.ContentLength)];
-
             await request.Body.ReadAsync(buffer, 0, buffer.Length);
-
             var bodyAsText = Encoding.UTF8.GetString(buffer);
+            body.Seek(0, SeekOrigin.Begin);
 
-            request.Body = body;
+            //request.Body = body;
 
             return $"{request.Scheme} {request.Host}{request.Path} {request.QueryString} {bodyAsText}";
+            //return "";
+            //var buffer = new byte[Convert.ToInt32(request.ContentLength)];
+            //await request.Body.ReadAsync(buffer, 0, buffer.Length);
+            //var bodyAsText = Encoding.UTF8.GetString(buffer);
+            ////request.Body = body;
+            //body.Seek(0, SeekOrigin.Begin);
+
+            //return bodyAsText;
         }
 
         private async Task<string> FormatResponse(HttpResponse response)
         {
             response.Body.Seek(0, SeekOrigin.Begin);
-
-            string text = await new StreamReader(response.Body).ReadToEndAsync();
-
+            var text = await new StreamReader(response.Body).ReadToEndAsync();
             response.Body.Seek(0, SeekOrigin.Begin);
 
-            return $"{response.StatusCode}: {text}";
+            return $"Response {text}";
         }
 
         static bool LogException(HttpContext httpContext, double elapsedMs, Exception ex)
@@ -133,5 +116,12 @@ namespace Invoice.WebAPI.Diagnostics
             return httpContext.Features.Get<IHttpRequestFeature>()?.RawTarget ?? httpContext.Request.Path.ToString();
         }
     }
-}
 
+    public static class RequestResponseLoggingMiddlewareExtensions
+    {
+        public static IApplicationBuilder UseRequestResponseLogging(this IApplicationBuilder builder)
+        {
+            return builder.UseMiddleware<RequestResponseLoggingMiddleware>();
+        }
+    }
+}
